@@ -1,3 +1,6 @@
+## Video de la presentacion
+https://youtu.be/FGW-7CmusI0
+
 ## Aplicativo movil
 Ubicarlo en la wiki:
 https://github.com/PIDESALUD/conectaton-2026/wiki
