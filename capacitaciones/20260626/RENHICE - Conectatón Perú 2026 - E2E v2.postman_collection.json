@@ -1,0 +1,702 @@
+{
+  "info": {
+    "_postman_id": "1d442020-fde0-4ffe-b483-7c2919e95ceb",
+    "name": "RENHICE - Conectatón Perú 2026 - E2E v2",
+    "description": "Flujo completo: Login Keycloak → DocumentReferences → Consent/Autorización → SHLink (QR) → IPS Bundle → Revocar → Verificar bloqueo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "3056325"
+  },
+  "item": [
+    {
+      "name": "01 - Login Keycloak (Password Grant)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('Login exitoso - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(json.access_token).to.not.be.empty;",
+              "});",
+              "if (json.access_token) {",
+              "    pm.collectionVariables.set('access_token', json.access_token);",
+              "    console.log('✅ Token guardado:', json.access_token.substring(0, 60) + '...');",
+              "    console.log('Expira en:', json.expires_in, 'segundos');",
+              "} else {",
+              "    console.log('❌ No se obtuvo token. Error:', JSON.stringify(json));",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "password"
+            },
+            {
+              "key": "client_id",
+              "value": "{{CLIENT_ID}}"
+            },
+            {
+              "key": "username",
+              "value": "{{DNI_PACIENTE}}"
+            },
+            {
+              "key": "password",
+              "value": "{{PASSWORD_PACIENTE}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{KEYCLOAK_URL}}/realms/{{REALM}}/protocol/openid-connect/token",
+          "host": [
+            "{{KEYCLOAK_URL}}"
+          ],
+          "path": [
+            "realms",
+            "{{REALM}}",
+            "protocol",
+            "openid-connect",
+            "token"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "02 - Health Check Auth Service",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Auth Service UP', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql('UP');",
+              "    console.log('✅ Auth Service:', json.status);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{AUTH_URL}}/actuator/health",
+          "host": [
+            "{{AUTH_URL}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "03 - Health Check FHIR Service",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('FHIR Service UP', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql('UP');",
+              "    console.log('✅ FHIR Service:', json.status);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{FHIR_URL}}/actuator/health",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "04 - JWKS Endpoint (Clave pública RS256)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('JWKS disponible', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.keys).to.be.an('array').that.is.not.empty;",
+              "    var key = json.keys[0];",
+              "    console.log('✅ JWKS OK');",
+              "    console.log('  kid:', key.kid);",
+              "    console.log('  alg:', key.alg);",
+              "    console.log('  kty:', key.kty);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{AUTH_URL}}/.well-known/jwks.json",
+          "host": [
+            "{{AUTH_URL}}"
+          ],
+          "path": [
+            ".well-known",
+            "jwks.json"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "05 - ITI-68 Listar DocumentReferences",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('DocumentReferences obtenidos - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.resourceType).to.eql('Bundle');",
+              "    console.log('Total DocumentReferences:', json.total);",
+              "    if (json.entry && json.entry.length > 0) {",
+              "        var ids = json.entry.slice(0, 2).map(function(e) {",
+              "            return 'DocumentReference/' + e.resource.id;",
+              "        });",
+              "        pm.collectionVariables.set('doc_ref_ids', JSON.stringify(ids));",
+              "        console.log('✅ DocRefs guardados:', ids);",
+              "    } else {",
+              "        console.log('⚠️ Sin DocumentReferences - usando IDs de prueba');",
+              "        pm.collectionVariables.set('doc_ref_ids', JSON.stringify(['DocumentReference/test-001', 'DocumentReference/test-002']));",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Accept",
+            "value": "application/fhir+json"
+          }
+        ],
+        "url": {
+          "raw": "{{FHIR_URL}}/fhir/DocumentReference",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "fhir",
+            "DocumentReference"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "06 - Crear Consent (Autorización)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Consent creado - 201', function() {",
+              "    pm.response.to.have.status(201);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.resourceType).to.eql('Consent');",
+              "    pm.expect(json.id).to.not.be.empty;",
+              "    pm.expect(json.status).to.eql('active');",
+              "    pm.collectionVariables.set('consent_id', json.id);",
+              "    console.log('✅ Consent ID guardado:', json.id);",
+              "    console.log('  Status:', json.status);",
+              "    console.log('  Patient:', json.patient ? json.patient.reference : 'N/A');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"docRefs\": {{doc_ref_ids}},\n  \"durationMinutes\": 30\n}"
+        },
+        "url": {
+          "raw": "{{FHIR_URL}}/fhir/Consent",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "fhir",
+            "Consent"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "07 - Generar SHLink (QR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('SHLink generado - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    console.log('Response completo:', JSON.stringify(json));",
+              "    pm.expect(json.sessionId).to.not.be.empty;",
+              "    pm.expect(json.token).to.not.be.empty;",
+              "    pm.collectionVariables.set('session_id',   json.sessionId);",
+              "    pm.collectionVariables.set('shlink_token', json.token);",
+              "    console.log('✅ Session ID guardado:', json.sessionId);",
+              "    console.log('✅ Token guardado:', json.token.substring(0, 60) + '...');",
+              "    console.log('  URL:', json.url);",
+              "    console.log('  Flag:', json.flag);",
+              "    console.log('  Expira:', json.expiresAt);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"docRefs\": {{doc_ref_ids}},\n  \"consentId\": \"{{consent_id}}\",\n  \"expirationMinutes\": 30,\n  \"requirePasscode\": false\n}"
+        },
+        "url": {
+          "raw": "{{AUTH_URL}}/api/shlink/generate",
+          "host": [
+            "{{AUTH_URL}}"
+          ],
+          "path": [
+            "api",
+            "shlink",
+            "generate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "08 - Validar JWT del QR",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('JWT válido - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.valid).to.be.true;",
+              "    console.log('✅ JWT válido');",
+              "    console.log('  SessionId:', json.sessionId);",
+              "    console.log('  ConsentId:', json.consentId);",
+              "    console.log('  DocRefs:', json.docRefs ? json.docRefs.length : 0);",
+              "    console.log('  Scope:', json.scope);",
+              "    console.log('  Expira:', json.expiresAt);",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{shlink_token}}\"\n}"
+        },
+        "url": {
+          "raw": "{{AUTH_URL}}/shlink/validate",
+          "host": [
+            "{{AUTH_URL}}"
+          ],
+          "path": [
+            "shlink",
+            "validate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "09 - Generate IPS (SIHCE simula escaneo QR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('IPS Bundle generado - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.resourceType).to.eql('Bundle');",
+              "    pm.expect(json.type).to.eql('document');",
+              "    console.log('✅ Bundle IPS generado');",
+              "    console.log('  Entries:', json.entry ? json.entry.length : 0);",
+              "    if (json.entry) {",
+              "        json.entry.forEach(function(e) {",
+              "            if (e.resource) {",
+              "                console.log('  -', e.resource.resourceType, '/', e.resource.id);",
+              "            }",
+              "        });",
+              "    }",
+              "    // Verificar Composition como primer entry",
+              "    var first = json.entry && json.entry[0] ? json.entry[0].resource : null;",
+              "    pm.expect(first).to.not.be.null;",
+              "    pm.expect(first.resourceType).to.eql('Composition');",
+              "    console.log('  Composition title:', first.title);",
+              "    // Verificar headers de no-persistencia",
+              "    pm.expect(pm.response.headers.get('X-RENHICE-No-Persist')).to.eql('true');",
+              "    pm.expect(pm.response.headers.get('X-RENHICE-Temporal')).to.eql('true');",
+              "    console.log('✅ Headers no-persistencia presentes');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{shlink_token}}"
+          },
+          {
+            "key": "X-Professional-Context",
+            "value": "{\"tipoDocumento\":\"DNI\",\"numeroDocumento\":\"12345678\",\"ipressId\":\"28\",\"ipressName\":\"Hospital Rebagliati\",\"system\":\"sihce-python\"}"
+          },
+          {
+            "key": "Accept",
+            "value": "application/fhir+json"
+          }
+        ],
+        "url": {
+          "raw": "{{FHIR_URL}}/shlink/{{session_id}}/generate-ips",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "shlink",
+            "{{session_id}}",
+            "generate-ips"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "10 - Obtener Consent por ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Consent obtenido - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.resourceType).to.eql('Consent');",
+              "    pm.expect(json.status).to.eql('active');",
+              "    console.log('✅ Consent activo:', json.id);",
+              "    console.log('  Status:', json.status);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Accept",
+            "value": "application/fhir+json"
+          }
+        ],
+        "url": {
+          "raw": "{{FHIR_URL}}/fhir/Consent/{{consent_id}}",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "fhir",
+            "Consent",
+            "{{consent_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "11 - Revocar Consent (Autorización)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Consent revocado - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.resourceType).to.eql('Consent');",
+              "    pm.expect(json.status).to.eql('rejected');",
+              "    console.log('✅ Consent revocado:', json.id);",
+              "    console.log('  Status:', json.status);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"rejected\"\n}"
+        },
+        "url": {
+          "raw": "{{FHIR_URL}}/fhir/Consent/{{consent_id}}",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "fhir",
+            "Consent",
+            "{{consent_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "12 - Generate IPS post-revocación (debe retornar 403)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('IPS bloqueado post-revocación - 403', function() {",
+              "    pm.response.to.have.status(403);",
+              "    var json = pm.response.json();",
+              "    console.log('✅ Acceso denegado correctamente');",
+              "    console.log('  Error:', json.error);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{shlink_token}}"
+          },
+          {
+            "key": "X-Professional-Context",
+            "value": "{\"tipoDocumento\":\"DNI\",\"numeroDocumento\":\"12345678\",\"ipressId\":\"28\",\"ipressName\":\"Hospital Rebagliati\",\"system\":\"sihce-python\"}"
+          },
+          {
+            "key": "Accept",
+            "value": "application/fhir+json"
+          }
+        ],
+        "url": {
+          "raw": "{{FHIR_URL}}/shlink/{{session_id}}/generate-ips",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "shlink",
+            "{{session_id}}",
+            "generate-ips"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "13 - CapabilityStatement FHIR",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('CapabilityStatement disponible - 200', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.resourceType).to.eql('CapabilityStatement');",
+              "    console.log('✅ CapabilityStatement OK');",
+              "    console.log('  FHIR version:', json.fhirVersion);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/fhir+json"
+          }
+        ],
+        "url": {
+          "raw": "{{FHIR_URL}}/shlink/metadata",
+          "host": [
+            "{{FHIR_URL}}"
+          ],
+          "path": [
+            "shlink",
+            "metadata"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "KEYCLOAK_URL",
+      "value": "https://dtuku.minsa.gob.pe"
+    },
+    {
+      "key": "REALM",
+      "value": "minsa-renhice"
+    },
+    {
+      "key": "CLIENT_ID",
+      "value": "renhice-mobile-app"
+    },
+    {
+      "key": "AUTH_URL",
+      "value": "https://datuq.minsa.gob.pe/auth-service"
+    },
+    {
+      "key": "FHIR_URL",
+      "value": "https://datuq.minsa.gob.pe/fhir-service"
+    },
+    {
+      "key": "DNI_PACIENTE",
+      "value": "45454541"
+    },
+    {
+      "key": "PASSWORD_PACIENTE",
+      "value": "demo2026"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "consent_id",
+      "value": ""
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "shlink_token",
+      "value": ""
+    },
+    {
+      "key": "doc_ref_ids",
+      "value": ""
+    }
+  ]
+}
