@@ -1,1 +1,2 @@
-Capacitación.txt
+## Aplicativo movil
+Ubicarlo en la wiki
