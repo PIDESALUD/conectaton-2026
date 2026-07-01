@@ -1,0 +1,113 @@
+{
+  "info": {
+    "_postman_id": "99b5ae77-be63-4866-b1d8-8f3eadd5efca",
+    "name": "Conectaton 2026 - Perú",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "6573380"
+  },
+  "item": [
+    {
+      "name": "1.- validate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"token\": \"eyJraWQiOiJyZW5oaWNlLWNvbmVjdGF0b24tNzI5N2U3MjYiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJwYXRpZW50X3JlZiI6IjQ1NDU0NTQxIiwic3ViIjoic2Vzc2lvbjphODgxOTUyOS1iY2QxLTQ1ODAtODA5OC04NjE0YzYzMjc3YTAiLCJhdWQiOiJyZW5oaWNlLWZoaXItc2VydmljZSIsImZsYWciOiJMIiwibWF4X3VzZXMiOjMsInNjb3BlIjoicGF0aWVudC9CdW5kbGUucmVhZCIsImlzcyI6Imh0dHBzOi8vZGF0dXEubWluc2EuZ29iLnBlL2F1dGgtc2VydmljZSIsImV4cCI6MTc4Mjg0MDYzNywiaWF0IjoxNzgyODM4ODM3LCJqdGkiOiJhYzBlOTEyYy0xNmFjLTQ4NzktOTM1Ny0zY2Q3OTU2NjM2ZjMiLCJkb2NfcmVmcyI6WyJEb2N1bWVudFJlZmVyZW5jZS8xMTE1OCIsIkRvY3VtZW50UmVmZXJlbmNlLzExMTYxIl0sImNvbnNlbnRfaWQiOiIxMTY0MiJ9.O-LhQ6hdCkYsD9gqbv_c1ktDIaU5SJYyNsv-EDEusK5BwVIAHj_5-FktnzDEN5b_TMuwY_aT6l5G7vNHgMIxVaS5sHRU-P2hBZxrlFXhzOmt3qkigbedMTe2inrlZtlA_PHmwVFUmZgZWHxVHzM9qAzpE92km_RIshYG86vB17Hp3KRemPkjuzILTnZDz1UO72Lfb8FEw7Yh15HLHFJGzQ1g3e7JITIS5rwrzrFZFRKhp17ePmCSBQG54sjKMv-VzU815wxeTQQ_A7DalD75T72OzwfefCZ14EOKSY3kP553I3-pgl_g57V_3ij65w0ET9Mdb-GwsUIfeAqt8Mm0jQ\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://datuq.minsa.gob.pe/auth-service/api/shlink/validate",
+          "protocol": "https",
+          "host": [
+            "datuq",
+            "minsa",
+            "gob",
+            "pe"
+          ],
+          "path": [
+            "auth-service",
+            "api",
+            "shlink",
+            "validate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2.- generar view",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "X-Professional-Context",
+            "value": "{\"tipoDocumento\":\"DNI\",\"numeroDocumento\":\"45678912\",\"ipressId\":\"00006000\",\"ipressName\":\"SAN GENARO\",\"system\":\"https://dsihce.gob.pe/profesionales\"}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://datuq.minsa.gob.pe/fhir-service/shlink/{{sessionid}}/generate-viewer",
+          "protocol": "https",
+          "host": [
+            "datuq",
+            "minsa",
+            "gob",
+            "pe"
+          ],
+          "path": [
+            "fhir-service",
+            "shlink",
+            "{{sessionid}}",
+            "generate-viewer"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3.- Vista resumen html",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://datuq.minsa.gob.pe/fhir-service/shlink/viewer?keyId={{keyId}}",
+          "protocol": "https",
+          "host": [
+            "datuq",
+            "minsa",
+            "gob",
+            "pe"
+          ],
+          "path": [
+            "fhir-service",
+            "shlink",
+            "viewer"
+          ],
+          "query": [
+            {
+              "key": "keyId",
+              "value": "{{keyId}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
